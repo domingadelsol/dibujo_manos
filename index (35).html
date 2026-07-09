@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dos Trazos — dibujo con las manos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#050505;
+    --panel:#0c0c0c;
+    --chrome:#141414;
+    --line:#242424;
+    --paper:#000000;
+    --white:#f5f5f5;
+    --amber:#ffb020;
+    --amber-dim: rgba(255,176,32,0.18);
+    --cyan:#5eead4;
+    --magenta:#f472b6;
+    --muted:#7a7a7a;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:var(--ink);
+    color:var(--white);
+    font-family:'Inter', sans-serif;
+    overflow-x:hidden;
+  }
+  .app{
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:28px 20px 60px;
+  }
+
+  /* ---- header ---- */
+  .topbar{
+    width:100%;
+    max-width:980px;
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:16px;
+    margin-bottom:22px;
+  }
+  .brand{
+    display:flex; flex-direction:column; gap:6px;
+  }
+  .brand .eyebrow{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    color:var(--amber);
+  }
+  .brand h1{
+    margin:0;
+    font-family:'JetBrains Mono', monospace;
+    font-weight:700;
+    font-size:22px;
+    letter-spacing:-0.02em;
+  }
+  .brand p{
+    margin:0;
+    font-size:13px;
+    color:var(--muted);
+    max-width:46ch;
+    line-height:1.5;
+  }
+
+  .controls{
+    display:flex;
+    flex-direction:column;
+    align-items:flex-end;
+    gap:10px;
+    flex-shrink:0;
+  }
+  .btn-row{ display:flex; gap:8px; }
+
+  button{
+    font-family:'JetBrains Mono', monospace;
+    font-size:12px;
+    letter-spacing:.04em;
+    border-radius:999px;
+    padding:11px 18px;
+    cursor:pointer;
+    border:1px solid var(--line);
+    background:var(--chrome);
+    color:var(--white);
+    transition:border-color .15s ease, background .15s ease, transform .1s ease;
+  }
+  button:hover{ border-color:#3a3a3a; }
+  button:active{ transform:scale(0.97); }
+  button:focus-visible{ outline:2px solid var(--amber); outline-offset:2px; }
+
+  #toggleCam{
+    background:var(--amber);
+    color:#1a1200;
+    border-color:var(--amber);
+    font-weight:700;
+  }
+  #toggleCam.on{
+    background:transparent;
+    color:var(--amber);
+  }
+  #toggleCam[disabled]{ opacity:.5; cursor:wait; }
+
+  #clearBtn{ color:var(--muted); }
+  #clearBtn:hover{ color:var(--white); }
+
+  .status{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    color:var(--muted);
+    display:flex;
+    align-items:center;
+    gap:7px;
+  }
+  .status .dot{
+    width:7px; height:7px; border-radius:50%;
+    background:var(--muted);
+  }
+  .status.live .dot{
+    background:var(--amber);
+    box-shadow:0 0 0 3px var(--amber-dim);
+  }
+
+  /* ---- stage ---- */
+  .stage-wrap{
+    width:100%;
+    max-width:980px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+  }
+  .stage{
+    position:relative;
+    width:100%;
+    aspect-ratio: 4 / 3;
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-radius:18px;
+    overflow:hidden;
+    box-shadow: 0 0 0 1px #000, 0 30px 60px -25px rgba(0,0,0,.8);
+  }
+  .stage .mirror{
+    position:absolute; inset:0;
+    transform: scaleX(-1);
+  }
+  canvas{
+    position:absolute; inset:0;
+    width:100%; height:100%;
+    display:block;
+  }
+  video{ display:none; }
+
+  .placeholder{
+    position:absolute; inset:0;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    gap:10px;
+    color:var(--muted);
+    font-family:'JetBrains Mono', monospace;
+    font-size:12px;
+    text-align:center;
+    padding:20px;
+    transition:opacity .3s ease;
+  }
+  .placeholder .glyph{
+    font-size:26px;
+    color:var(--line);
+  }
+  .placeholder.hidden{ opacity:0; pointer-events:none; }
+
+  /* fingertip legend, bottom-left of stage */
+  .legend{
+    position:absolute;
+    bottom:14px; left:14px;
+    display:flex; gap:14px;
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    color:var(--muted);
+    z-index:5;
+    background:rgba(0,0,0,.55);
+    padding:7px 11px;
+    border-radius:999px;
+    border:1px solid var(--line);
+    backdrop-filter: blur(6px);
+  }
+  .legend span{ display:flex; align-items:center; gap:6px; }
+  .legend i{
+    width:8px; height:8px; border-radius:50%; display:inline-block;
+  }
+  .legend .l{ background:var(--cyan); }
+  .legend .r{ background:var(--magenta); }
+
+  /* picture-in-picture preview, bottom-right of stage */
+  .pip{
+    position:absolute;
+    bottom:14px; right:14px;
+    width:132px; aspect-ratio: 4/3;
+    border-radius:10px;
+    overflow:hidden;
+    border:1px solid var(--line);
+    background:#000;
+    z-index:5;
+    opacity:.92;
+  }
+  .pip canvas{ transform: scaleX(-1); }
+
+  .foot{
+    max-width:980px;
+    width:100%;
+    margin-top:16px;
+    display:flex;
+    justify-content:space-between;
+    gap:20px;
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    color:var(--muted);
+    flex-wrap:wrap;
+  }
+
+  @media (max-width: 640px){
+    .topbar{ flex-direction:column; }
+    .controls{ align-items:flex-start; width:100%; }
+    .btn-row{ width:100%; }
+    button{ flex:1; }
+    .pip{ width:96px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="brand">
+      <span class="eyebrow">Seguimiento de manos · lienzo en vivo</span>
+      <h1>Dos Trazos</h1>
+      <p>El índice de tu mano izquierda y el de tu mano derecha se convierten en dos lápices blancos. Muévelos frente a la cámara para dibujar.</p>
+    </div>
+    <div class="controls">
+      <div class="btn-row">
+        <button id="toggleCam">Activar cámara</button>
+        <button id="clearBtn">Limpiar</button>
+      </div>
+      <div class="status" id="status"><span class="dot"></span><span id="statusText">cámara apagada</span></div>
+    </div>
+  </div>
+
+  <div class="stage-wrap">
+    <div class="stage" id="stage">
+      <div class="mirror">
+        <canvas id="trailCanvas" width="1280" height="960"></canvas>
+        <canvas id="cursorCanvas" width="1280" height="960"></canvas>
+      </div>
+
+      <div class="legend">
+        <span><i class="l"></i>índice izquierdo</span>
+        <span><i class="r"></i>índice derecho</span>
+      </div>
+
+      <div class="pip">
+        <canvas id="pipCanvas" width="320" height="240"></canvas>
+      </div>
+
+      <div class="placeholder" id="placeholder">
+        <div class="glyph">✋ 🤚</div>
+        <div>Pulsa «Activar cámara» y muestra tus manos<br>al recuadro pequeño para calibrar el trazo</div>
+      </div>
+    </div>
+
+    <div class="foot">
+      <span>El trazo se ancla a la punta del dedo índice (landmark 8) de cada mano.</span>
+      <span>Nada se envía a ningún servidor — el video se procesa en tu navegador.</span>
+    </div>
+  </div>
+
+  <video id="video" playsinline></video>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+<script>
+(function(){
+  const video = document.getElementById('video');
+  const trailCanvas = document.getElementById('trailCanvas');
+  const cursorCanvas = document.getElementById('cursorCanvas');
+  const pipCanvas = document.getElementById('pipCanvas');
+  const trailCtx = trailCanvas.getContext('2d');
+  const cursorCtx = cursorCanvas.getContext('2d');
+  const pipCtx = pipCanvas.getContext('2d');
+  const toggleBtn = document.getElementById('toggleCam');
+  const clearBtn = document.getElementById('clearBtn');
+  const statusEl = document.getElementById('status');
+  const statusText = document.getElementById('statusText');
+  const placeholder = document.getElementById('placeholder');
+
+  const STROKE_WIDTH = 16;
+  const HAND_CONNECTIONS = window.HAND_CONNECTIONS;
+
+  // clear the black "paper" once at start
+  function clearTrail(){
+    trailCtx.fillStyle = '#000000';
+    trailCtx.fillRect(0,0,trailCanvas.width, trailCanvas.height);
+  }
+  clearTrail();
+
+  const lastPoints = { Left: null, Right: null };
+  let camera = null;
+  let running = false;
+
+  const hands = new Hands({
+    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+  });
+  hands.setOptions({
+    maxNumHands: 2,
+    modelComplexity: 1,
+    minDetectionConfidence: 0.65,
+    minTrackingConfidence: 0.6
+  });
+  hands.onResults(onResults);
+
+  function toCanvasCoords(landmark, w, h){
+    return { x: landmark.x * w, y: landmark.y * h };
+  }
+
+  function drawSegment(ctx, from, to, color){
+    ctx.strokeStyle = color;
+    ctx.lineWidth = STROKE_WIDTH;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
+  function drawCursor(ctx, pt, color){
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, STROKE_WIDTH * 0.9, 0, Math.PI*2);
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.9;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, STROKE_WIDTH * 1.9, 0, Math.PI*2);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.5;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  function onResults(results){
+    const w = trailCanvas.width, h = trailCanvas.height;
+
+    // --- cursor layer (cleared every frame) ---
+    cursorCtx.clearRect(0,0,w,h);
+
+    // --- pip preview: raw frame + hand skeleton (shows the "contorno" of the hands) ---
+    pipCtx.save();
+    pipCtx.clearRect(0,0,pipCanvas.width, pipCanvas.height);
+    if (results.image){
+      pipCtx.drawImage(results.image, 0,0, pipCanvas.width, pipCanvas.height);
+    }
+    pipCtx.restore();
+
+    const seenThisFrame = { Left:false, Right:false };
+
+    if (results.multiHandLandmarks && results.multiHandedness){
+      results.multiHandLandmarks.forEach((landmarks, i) => {
+        const label = results.multiHandedness[i].label; // 'Left' | 'Right'
+        const color = label === 'Left' ? '#5eead4' : '#f472b6';
+
+        // skeleton in the small PiP preview
+        if (window.drawConnectors && HAND_CONNECTIONS){
+          drawConnectors(pipCtx, landmarks, HAND_CONNECTIONS, { color: color, lineWidth: 2 });
+        }
+        if (window.drawLandmarks){
+          drawLandmarks(pipCtx, landmarks, { color: color, lineWidth: 1, radius: 2 });
+        }
+
+        // fingertip = landmark 8 (index finger tip)
+        const tip = toCanvasCoords(landmarks[8], w, h);
+        seenThisFrame[label] = true;
+
+        drawCursor(cursorCtx, tip, color);
+
+        const prev = lastPoints[label];
+        if (prev){
+          drawSegment(trailCtx, prev, tip, '#ffffff');
+        } else {
+          // starting a new stroke: leave a dot so a single tap is visible
+          trailCtx.beginPath();
+          trailCtx.fillStyle = '#ffffff';
+          trailCtx.arc(tip.x, tip.y, STROKE_WIDTH/2, 0, Math.PI*2);
+          trailCtx.fill();
+        }
+        lastPoints[label] = tip;
+      });
+    }
+
+    ['Left','Right'].forEach(label => {
+      if (!seenThisFrame[label]) lastPoints[label] = null;
+    });
+  }
+
+  async function startCamera(){
+    toggleBtn.disabled = true;
+    toggleBtn.textContent = 'Iniciando…';
+    try{
+      camera = new Camera(video, {
+        onFrame: async () => { await hands.send({ image: video }); },
+        width: 1280,
+        height: 960
+      });
+      await camera.start();
+      running = true;
+      toggleBtn.textContent = 'Apagar cámara';
+      toggleBtn.classList.add('on');
+      statusEl.classList.add('live');
+      statusText.textContent = 'cámara encendida · rastreando manos';
+      placeholder.classList.add('hidden');
+    }catch(err){
+      console.error(err);
+      statusText.textContent = 'no se pudo acceder a la cámara';
+      toggleBtn.textContent = 'Activar cámara';
+    }
+    toggleBtn.disabled = false;
+  }
+
+  function stopCamera(){
+    if (camera){ camera.stop(); camera = null; }
+    if (video.srcObject){
+      video.srcObject.getTracks().forEach(t => t.stop());
+      video.srcObject = null;
+    }
+    running = false;
+    lastPoints.Left = null;
+    lastPoints.Right = null;
+    cursorCtx.clearRect(0,0,cursorCanvas.width, cursorCanvas.height);
+    pipCtx.clearRect(0,0,pipCanvas.width, pipCanvas.height);
+    toggleBtn.textContent = 'Activar cámara';
+    toggleBtn.classList.remove('on');
+    statusEl.classList.remove('live');
+    statusText.textContent = 'cámara apagada';
+    placeholder.classList.remove('hidden');
+  }
+
+  toggleBtn.addEventListener('click', () => {
+    if (running){ stopCamera(); } else { startCamera(); }
+  });
+
+  clearBtn.addEventListener('click', () => {
+    clearTrail();
+  });
+})();
+</script>
+</body>
+</html>
